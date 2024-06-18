@@ -1,5 +1,5 @@
 module esp_comp_nuopc
-! this is a dummy module to be used to temporarily build a dummy libesp.a
+! this is a dummy DART Component to be used to temporarily build a dummy libesp.a
 
   use ESMF             , only : ESMF_VM, ESMF_VMBroadcast
   use ESMF             , only : ESMF_Mesh, ESMF_GridComp, ESMF_SUCCESS, ESMF_LogWrite
@@ -27,6 +27,7 @@ module esp_comp_nuopc
   use NUOPC_Model      , only : NUOPC_ModelGet, setVM
 
   implicit none
+
   private ! except
 
   public  :: SetServices
@@ -35,29 +36,45 @@ module esp_comp_nuopc
   character(len=*),parameter :: u_FILE_u = &
      __FILE__
 
+  !----------------------------------------------------------------------------------
   contains
+  !----------------------------------------------------------------------------------
+  ! The user-written part of Gridded component is associated with an ESMF_GridComp  !
+  ! derived type through a routine called ESMF_SetServices(). A Gridded component   !
+  ! is a computational entity which consumes and produce data. It uses a State      !
+  ! object to manage time, and a VM to describe its own and its child components'   !
+  ! computational resources.                                                        !
 
-  subroutine SetServices(gcomp, rc)
-    type(ESMF_GridComp)  :: gcomp
+  subroutine SetServices(dgcomp, rc)
+    ! In Fortran, you declare a variable of the derived type and then set its attributes.
+    type(ESMF_GridComp)  :: dgcomp ! ESMF gridded component that represent DART which has specific computational function.  
     integer, intent(out) :: rc
 
-    ! local variables
+    rc = ESMF_SUCCESS
+
+    ! here goes all the local variables
     character(len=*),parameter  :: subname='(DART_cap:SetServices)'
 
-    rc = ESMF_SUCCESS
+
+
+
+
     call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
 
-    ! the NUOPC gcomp component will register the generic methods
-    call NUOPC_CompDerive(gcomp, model_routine_SS, rc=rc)
-    if (ChkErr(rc,__LINE__,u_FILE_u)) return
+    ! derive from NUOPC_Model
+    call NUOPC_CompDerive(dgcomp, model_routine_SS, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+       line=__LINE__, &
+       file=__FILE__)) &
+       return ! bail out
 
     ! switching to desired IPD versions
-    call ESMF_GridCompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
+    call ESMF_GridCompSetEntryPoint(dgcomp, ESMF_METHOD_INITIALIZE, &
         userRoutine=InitializeP0, phase=0, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
     ! set entry point for methods that require specific implementation
-    call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
+    call NUOPC_CompSetEntryPoint(dgcomp, ESMF_METHOD_INITIALIZE, &
       phaseLabelList=(/"IPDv03p1"/), userRoutine=InitializeAdvertise, rc=rc)
     if (ChkErr(rc,__LINE__,u_FILE_u)) return
     call NUOPC_CompSetEntryPoint(gcomp, ESMF_METHOD_INITIALIZE, &
@@ -149,3 +166,68 @@ logical function ChkErr(rc, line, file)
 end function ChkErr
 
 end module esp_comp_nuopc
+
+
+
+
+
+!!! modified Realize subroutine !!!
+!! To modify the RealizeProvided subroutine for a DART NUOPC cap where it's specifically designed 
+!! to accept state variables from an ocean model on the same grid, we need to focus on the interaction 
+!! where DART acts as a receiver of the grid and associated fields. The following modifications are 
+!! tailored to reflect a scenario where DART realizes fields provided by the ocean model, using the 
+!! ocean model's grid without altering it.
+
+subroutine RealizeProvided(model, rc)
+  type(ESMF_GridComp)  :: model
+  integer, intent(out) :: rc
+
+  ! Local variables
+  type(ESMF_State)        :: importState, exportState
+  type(ESMF_Field)        :: field
+  type(ESMF_Grid)         :: receivedGrid
+  character(ESMF_MAXSTR)  :: transferAction
+
+  rc = ESMF_SUCCESS
+
+  ! Retrieve import and export states from the model
+  call NUOPC_ModelGet(model, importState=importState, &
+    exportState=exportState, rc=rc)
+  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    line=__LINE__, file=__FILE__)) return
+
+  ! Iterate through key fields that DART will use from the ocean model
+  ! Example: Sea Surface Temperature (SST)
+  call ESMF_StateGet(importState, field=field, itemName="sst", rc=rc)
+  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    line=__LINE__, file=__FILE__)) return
+
+  ! Check the transfer action to confirm if the ocean model is providing the grid
+  call NUOPC_GetAttribute(field, name="ConsumerTransferAction", &
+    value=transferAction, rc=rc)
+  if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+    line=__LINE__, file=__FILE__)) return
+
+  ! Accept the grid only if the action is 'provide'
+  if (trim(transferAction) == "provide") then
+    ! Get the grid associated with the field
+    call ESMF_FieldGet(field, grid=receivedGrid, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
+    ! Log that DART is accepting the grid
+    call ESMF_LogWrite("DART is accepting the provided Grid for Field 'sst'.", &
+      ESMF_LOGMSG_INFO, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+
+    ! Realize the field on the received grid
+    call NUOPC_Realize(importState, field=field, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, file=__FILE__)) return
+  endif
+
+  ! Additional fields can be handled similarly
+  ! Include handling for other fields such as Sea Surface Salinity (SSS) or others
+
+end subroutine
