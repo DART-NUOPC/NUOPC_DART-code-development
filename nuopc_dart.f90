@@ -70,14 +70,14 @@ module esp_comp_nuopc
   
       ! specialize the derived grid component, in this case dart grid component
       call NUOPC_CompSpecialize(dgcomp, specLabel=label_Advertise, &
-        specRoutine=Advertise, rc=rc)
+        specRoutine=InitializeAdvertise, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return ! bail out
   
       call NUOPC_CompSpecialize(dgcomp, specLabel=label_RealizrProvided, &
-        specRoutine=Realize, rc=rc)
+        specRoutine=InitializeRealize, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
@@ -99,39 +99,87 @@ module esp_comp_nuopc
   
     end subroutine SetServices
   
-    subroutine InitializeP0(gcomp, importState, exportState, clock, rc)
-      type(ESMF_GridComp)   :: gcomp                    !< ESMF_GridComp object
-      type(ESMF_State)      :: importState, exportState !< ESMF_State object for
-                                                        !! import/export fields
-      type(ESMF_Clock)      :: clock                    !< ESMF_Clock object
-      integer, intent(out)  :: rc                       !< return code
   
-      rc = ESMF_SUCCESS
   
-      ! Switch to IPDv03 by filtering all other phaseMap entries
-      call NUOPC_CompFilterPhaseMap(gcomp, ESMF_METHOD_INITIALIZE, &
-           acceptStringList=(/"IPDv03p"/), rc=rc)
-      if (ChkErr(rc,__LINE__,u_FILE_u)) return
-    end subroutine InitializeP0
   
-    subroutine InitializeAdvertise(gcomp, importState, exportState, clock, rc)
-      type(ESMF_GridComp)            :: gcomp                    !< ESMF_GridComp object
-      type(ESMF_State)               :: importState, exportState !< ESMF_State object for
-                                                                 !! import/export fields
-      type(ESMF_Clock)               :: clock                    !< ESMF_Clock object
+    subroutine InitializeAdvertise(dgcomp, rc)
+      type(ESMF_GridComp)            :: dgcomp                   !< ESMF_GridComp object
       integer, intent(out)           :: rc                       !< return code
   
+      ! local variables
+      type(ESMF_State)               :: importState, exportState ! ESMF state object for 
+                                                                 ! import/export fields
+      type(ESMF_Clock)               :: clock
+                                                          
       rc = ESMF_SUCCESS
+  
+      ! query for importState and exportState to ensure that data dependencies (import and export states) 
+      ! are correctly initialized and available before the model performs any computations that depend on 
+      ! them.
+      call NUOPC_ModelGet(dgcomp, importState=importState, &
+        exportState=exportable, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LogFoundError, &
+        line=__LINE__, &
+        file=__FILE__))&
+      return ! bail out
+      
+      ! query model grid
+      call NUOPC_ModelGet(dgcomp, grid=modelGrid, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LogFoundError, &
+        line=__LINE__, &
+        file=__FILE__))&
+      return ! bail out
+  
+  
+      ! If it founds a import and export state then the following code would execute
+      call NUOPC_Advertise(importState, &
+        StandardName="temperature", name="temp", &
+        TransferOfferGeomObject="require", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+  
+      
     end subroutine InitializeAdvertise
   
-    subroutine InitializeRealize(gcomp, importState, exportState, clock, rc)
-      type(ESMF_GridComp)  :: gcomp                    !< ESMF_GridComp object
-      type(ESMF_State)     :: importState, exportState !< ESMF_State object for
+  
+  
+  
+    subroutine InitializeRealize(dgcomp, rc)
+      type(ESMF_GridComp)    :: dgcomp                    !< ESMF_GridComp object
+      type(ESMF_State)       :: importState, exportState !< ESMF_State object for
                                                        !! import/export fields
-      type(ESMF_Clock)     :: clock                    !< ESMF_Clock object
-      integer, intent(out) :: rc                       !< return code
+      type(ESMF_Grid)        :: receivedGrid
+      type(ESMF_Clock)       :: clock                    !< ESMF_Clock object
+      type(ESMF_Field)       :: field
+      character(ESMF_MAXSTR) :: transferAction
+      integer, intent(out)   :: rc                       !< return code
   
       rc = ESMF_SUCCESS
+  
+      ! query for importState and exportState
+      call NUOPC_ModelGet(dgcomp, importState=importState, &
+        exportState=exportState, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        file=__FILE__,&
+        line=__LINE__))&
+      return ! bail out
+  
+      ! Get field from the import state
+      call ESMF_StateGet(importState, field=field, itemName="temp", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, & 
+        file=__FILE__))&
+      return ! bail out
+  
+      call NUOPC_GetAttribute(field, name="ConsumerTransferAction", &
+        value)
+  
+      
+  
+  
+  
     end subroutine InitializeRealize
     
     subroutine ModelAdvance(gcomp, importState, exportState, clock, rc)
