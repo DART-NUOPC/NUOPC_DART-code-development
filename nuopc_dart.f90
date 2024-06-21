@@ -134,7 +134,7 @@ module esp_comp_nuopc
       ! If it founds a import and export state then the following code would execute
       call NUOPC_Advertise(importState, &
         StandardName="temperature", name="temp", &
-        TransferOfferGeomObject="require", rc=rc)
+        TransferOfferGeomObject="can provide", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
@@ -214,7 +214,7 @@ module esp_comp_nuopc
           file=__FILE__))&
         return ! bail out 
       endif
-      
+     
         
       
   
