@@ -117,66 +117,30 @@ module esp_comp_nuopc
       ! are correctly initialized and available before the model performs any computations that depend on 
       ! them.
       call NUOPC_ModelGet(dgcomp, importState=importState, &
-        exportState=exportState, rc=rc)
+        exportState=exportable, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LogFoundError, &
         line=__LINE__, &
         file=__FILE__))&
       return ! bail out
       
-  
-      !Right now we are just advertising two field but this code should be changed accordingly!
-
-      ! importState is the state object that the field is being advertised to. The import state holds fields
-      ! that the model can receive from other components.
-      call NUOPC_Advertise(importState, &
-        StandardName="temperature", name="temp", &
-        TransferOfferGeomObject="cannot provide", rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__))&
-      return ! bail out
-
-      call NUOPC_Advertise(importState, &
-        StandardName="Salinity", name="sal", &
-        TransferOfferGeomObject="can provide", rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__))&
-      return ! bail out
-
-      call ESMF_LOGWRITE("Done advertising fields in DART importState", &
-        ESMF_LOGMSG_INFO, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      ! query model grid
+      call NUOPC_ModelGet(dgcomp, grid=modelGrid, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LogFoundError, &
         line=__LINE__, &
         file=__FILE__))&
       return ! bail out
   
-
-      ! exportable field: temperature
-
-      call NUOPC_Advertise(exportState, &
-        StandardName="temperature", name="temp", &
-        TransferOfferGeomObject="can provide", rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__))&
-      return ! bail out
-
+  
+      ! If it founds a import and export state then the following code would execute
       call NUOPC_Advertise(importState, &
-        StandardName="Salinity", name="sal", &
-        TransferOfferGeomObject="can provide", rc=rc)
+        StandardName="temperature", name="temp", &
+        TransferOfferGeomObject="require", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
-      return ! bail out
-
-      call ESMF_LOGWRITE("Done advertising fields in DART exportState", &
-        ESMF_LOGMSG_INFO, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__))&
-      return ! bail out
-
+        return ! bail out
+  
+      
     end subroutine InitializeAdvertise
   
   
@@ -186,7 +150,7 @@ module esp_comp_nuopc
       type(ESMF_GridComp)    :: dgcomp                    !< ESMF_GridComp object
       type(ESMF_State)       :: importState, exportState !< ESMF_State object for
                                                        !! import/export fields
-      type(ESMF_Grid)        :: receivedGrid
+      type(ESMF_Grid)        :: gridIn, gridOut
       type(ESMF_Clock)       :: clock                    !< ESMF_Clock object
       type(ESMF_Field)       :: field
       character(ESMF_MAXSTR) :: transferAction
@@ -202,46 +166,56 @@ module esp_comp_nuopc
         line=__LINE__))&
       return ! bail out
   
+      ! create Grid objects for import Fields
+      gridIn = ESMF_GridCreate1PeriDimUfrm(maxIndex=(/100, 150/), &
+        minCornerCoord=(/0._ESMF_KIND_R8, -60._ESMF_KIND_R8/), &
+        maxCornerCoord=(/360._ESMF_KIND_R8, 80._ESMF_KIND_R8/), &
+        staggerLocList=(/ESMF_STAGGERLOC_CENTER/), name="OCN-GridIn", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        file=__FILE__, &
+        line=__LINE__))&
+      return ! bail out
+  
+      gridOut = gridIn ! grid in should be equal to grid out
+  
       ! Get field from the import state
       call ESMF_StateGet(importState, field=field, itemName="temp", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, & 
         file=__FILE__))&
       return ! bail out
-
-      !! Retrieve the grid associated with the field
-      !call ESMF_FieldGetGrid(field, receivedGrid, rc=rc)
-      !if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-       ! line=__LINE__, &
-      !  file=__FILE__))&
-      !return ! bail out!
-
-
-         
   
       call NUOPC_GetAttribute(field, name="ConsumerTransferAction", &
         value=transferAction, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, & 
+        line=__LINE__, &
         file=__FILE__))&
       return ! bail out
       if (trim(transferAction)=="provide") then
-        ! the connector instructed the DART to provide the Grid object for "temp"
-        call ESMF_LogWrite("DART is providing Grid for Field 'temp'.", &
+        ! the Connector instructed the DART to provide the Grid object for "temp"
+        call ESMF_LOGWRITE("DART is providing Grid for Field 'temp'.", &
           ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
-          file=__FILE__)) then
-          call ESMF_LogWrite("ERROR: Failed to provide the Grid for Field 'temp'.", &
-            ESMF_LOGMSG_INFO, rc=rc)
-          return ! bail out
-        endif
-
-        field = 
-
-
-      field = ESMF_FieldCreate(name="temp", grid=)
+          file=__FILE__))&
+        return ! bail out
   
+        call NUOPC_Realize(importState, field=field, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__))&
+        return ! bail out
+      else ! transferAction=="accept"
+        ! the connector instructed the DART to accept the Grid from OCN for "temp"
+        call ESMF_LOGWRITE("DART is accepting Grid fopr the Field 'temp'.", &
+          ESMF_LOGMSG_INFO, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__))&
+        return ! bail out 
+      endif
+      
+        
       
   
   
