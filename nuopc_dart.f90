@@ -81,21 +81,21 @@ module esp_comp_nuopc
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
-      return ! bail out
+        return ! bail out
   
       call NUOPC_CompSpecialize(dgcomp, specLabel=label_Advance, &
         specRoutine=Advance, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
-      return ! bail out
+        return ! bail out
   
       call NUOPC_CompSpecialize(dgcomp, specLabel=label_Finalize, &
         specRoutine=Finalize, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
-      return ! bail out
+        return ! bail out
   
     end subroutine SetServices
   
@@ -121,14 +121,14 @@ module esp_comp_nuopc
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LogFoundError, &
         line=__LINE__, &
         file=__FILE__))&
-      return ! bail out
+        return ! bail out
       
       ! query model grid
       call NUOPC_ModelGet(dgcomp, grid=modelGrid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LogFoundError, &
         line=__LINE__, &
         file=__FILE__))&
-      return ! bail out
+        return ! bail out
   
   
       ! If it founds a import and export state then the following code would execute
@@ -156,7 +156,7 @@ module esp_comp_nuopc
       character(ESMF_MAXSTR) :: transferAction
       integer, intent(out)   :: rc                       !< return code
   
-      rc = ESMF_SUCCESS
+      rc = ESMF_SUCCESS ! initial setup: the return code 'rc' is initialized to 'ESMF_SUCCESS'
   
       ! query for importState and exportState
       call NUOPC_ModelGet(dgcomp, importState=importState, &
@@ -164,7 +164,7 @@ module esp_comp_nuopc
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         file=__FILE__,&
         line=__LINE__))&
-      return ! bail out
+        return ! bail out
   
       ! create Grid objects for import Fields
       gridIn = ESMF_GridCreate1PeriDimUfrm(maxIndex=(/100, 150/), &
@@ -174,7 +174,7 @@ module esp_comp_nuopc
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         file=__FILE__, &
         line=__LINE__))&
-      return ! bail out
+        return ! bail out
   
       gridOut = gridIn ! grid in should be equal to grid out
   
@@ -183,14 +183,14 @@ module esp_comp_nuopc
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, & 
         file=__FILE__))&
-      return ! bail out
+        return ! bail out
   
       call NUOPC_GetAttribute(field, name="ConsumerTransferAction", &
         value=transferAction, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
-      return ! bail out
+        return ! bail out
       if (trim(transferAction)=="provide") then
         ! the Connector instructed the DART to provide the Grid object for "temp"
         call ESMF_LOGWRITE("DART is providing Grid for Field 'temp'.", &
@@ -198,30 +198,127 @@ module esp_comp_nuopc
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__))&
-        return ! bail out
+          return ! bail out
   
         call NUOPC_Realize(importState, field=field, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__))&
-        return ! bail out
+          return ! bail out
       else ! transferAction=="accept"
         ! the connector instructed the DART to accept the Grid from OCN for "temp"
-        call ESMF_LOGWRITE("DART is accepting Grid fopr the Field 'temp'.", &
+        call ESMF_LOGWRITE("DART is accepting Grid for the Field 'temp'.", &
           ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__))&
-        return ! bail out 
+          return ! bail out 
       endif
-     
-        
-      
-  
-  
-  
+
+      !! Realizing Export Field
+
+      call ESMF_LogWrite("DART is providing Grid for Field 'Salinity'.", &
+        ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
+      field = ESMF_FieldCreate(name="sal", grid=gridOut, &
+        typekind=ESMF_TYPEKIND_R8, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return ! bail out
+
+      call NUOPC_Realize(exportState, field=field, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return ! bail out
+
+      call ESMF_LOGWRITE("Done realizing fields in DART import/exportStates"// &
+      "that do not need grid grid transfer, all Grids are provided by DART", ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return ! bail out
+
+
     end subroutine InitializeRealize
     
+
+    ! In this routine the DART component can access the transferred grid/mesh/locstream on the field that have "accept" value. 
+    ! However, only the DistGrid, i.e, the decomposition and distribution information of the grid/mesh/locstream is available at 
+    ! this stage, not the full physical grid information such as the coordinates.
+    subroutine AcceptTransfer(dgcomp, rc)
+      type(ESMF_GridComp)   :: dgcomp
+      integer, intent(out)  :: rc  
+
+      !local variable
+      type(ESMF_State)             :: importState, exportState
+      type(ESMF_Field)             :: field
+      type(ESMF_Grid)              :: grid
+      integer                      :: localDeCount
+      character(80)                :: name
+      character(160)               :: msgString
+
+      type(ESMF_DistGrid)          :: distgrid
+      integer                      :: dimCount, tileCount, arbDimCount
+      integer, allocatable         :: minIndexPTile(:,:), maxIndexPTile(:,:)
+      integer                      :: connectionCount
+      type(ESMF_DistGridConnection), allocatable :: connectionList(:)
+      charachter(ESMF_MAXSTR)      :: transferAction
+      logical                      :: regDecompFlag
+
+      rc= ESMF_SUCCESS
+
+      ! query for import state and export state
+      call NUOPC_ModelGet(dgcomp, importState=importState, &
+        exportState=exportState, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! accecc the "temp" field in the exportState 
+      call ESMF_StateGet(exportState, field=field, itemName="temp", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! while this is still an empty field, it does now hold a Grid with DistGrid
+      call ESMF_FieldGet(field, grid=grid, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! check the grid name and print it out
+      call ESMF_GridGet(grid, name=name, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      write(msgString,*) "DART - InitializeP4: transferred Grid name= ", name
+      call ESMF_LOGWRITE(msgString, ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! access localDeCount to show this is a real Grid
+      call ESMG_GridGet(grid, localDeCount=localDeCount, distgrid=distgrid, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+
+
+
+
     subroutine ModelAdvance(gcomp, importState, exportState, clock, rc)
       type(ESMF_GridComp) :: gcomp
       type(ESMF_State) :: importState, exportState
