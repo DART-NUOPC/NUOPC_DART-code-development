@@ -281,21 +281,25 @@ module esp_comp_nuopc
         file=__FILE__)) &
         return  ! bail out
 
-      ! accecc the "temp" field in the exportState 
+      ! accecc the "temp" field in the exportState, and ESMF_StateGet is a function to retrieve a field 
+      ! from a state (in this case exportState). When it is called it searches for a field with the name
+      ! "temp" within exportState. If the field is found, it is assigned to the variable 'field'. This means
+      ! 'field' now references the "temp" field from the exportState.
       call ESMF_StateGet(exportState, field=field, itemName="temp", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
 
-      ! while this is still an empty field, it does now hold a Grid with DistGrid
+      ! while this is still an empty field, it hold a Grid with DistGrid. This step would retrieve the grid 
+      ! associated with the 'field' (which is now "temp")
       call ESMF_FieldGet(field, grid=grid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
 
-      ! check the grid name and print it out
+      ! check the grid name and print it out, this is just a step in logging the information.
       call ESMF_GridGet(grid, name=name, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -308,12 +312,103 @@ module esp_comp_nuopc
         file=__FILE__)) &
         return  ! bail out
 
-      ! access localDeCount to show this is a real Grid
+      ! access localDeCount to show this is a real Grid. By checking `localDeCount`, the code verifies that the grid is not just
+      ! an empty placeholder but a real, decomposed grid. The logged `localDeCount` helps confirm this in the log output.
       call ESMG_GridGet(grid, localDeCount=localDeCount, distgrid=distgrid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
+
+      write(msgString, *) "DART - InitializeP4: localDeCount = ", localDeCount
+      call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+
+      ! At this stage DART can modify the distribution and decomposition information of the retrieved grid by replacing the DistGrid
+      ! object in the grid. The DistGrid that is set on the grid/mesh/locstream obejcts when leaving the model/mediator phase 
+      ! label_AcceptTransfer will consequently be used by the generic CONNECTOR to fully transfer the Grid/Mesh/Locstream object.
+      ! The fully trasferred objects are available on the Fields with "accpet" during Model/Mediator phase label_RealizeAccepted, where
+      ! they are used to realize the respective Field objects.
+
+      ! Create a custom DistGrid, based on the minIndex and maxIndex of the accpeted DistGrid, but with a default regDecomp
+      ! (regular decomposition- its a way to partition the grid into regular subdomains. This is typically simpler and more
+      ! efficient than arbitrary decompositions) for the current VM that leads to 1DE/PET (1 decomposition per processing
+      ! element (PET)). If you want to add routine for arbitrary decomposition you can do it here!
+      
+      ! get dimCount and tileCount
+      call ESMF_DistGridGet(distgrid, dimCount=dimCount, tileCount=tileCount, &
+        connectionCount=connectionCount, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out 
+
+      ! allocate minIndexPTile and maxIndexPTile accord. to dimCount and tileCount
+      allocate(minIndexPTile(dimCount, tileCount), &
+        maxIndexPTile(dimCount, tileCount)) 
+      allocate(connectionList(connectionCount))
+
+      !! `dimCount`: Number of dimensions in the grid (e.g, for a 2D grid, 3 for a 3D grid)
+      !! `connectionCount`: Number of connections or adjacency relationships between tiles or decompotion elements in the grid,
+      !! used for managing data exchange and communication. 
+
+      ! get minIndex and maxIndex arrays to populate memory that allocated above!
+      call ESMF_DistGridGet(distgrid, maxIndexPTile=maxIndexPTile, &
+        minIndexPTile=minIndexPTile, connectionList=connectionCount, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! create the new DistGrid with the same minIndexPTile and maxIndexPTile,
+      ! but use default multi-tile regDecomp if the default regDecomp is not suitable, a custom one could be set
+      ! up here and used.
+      distgrid = ESMF_DistGridCreate(minIndexPTile=minIndexPTile, &
+        maxIndexPTile=maxIndexPTile, connectionList=connectionList, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      deallocate(minIndexPTile, maxIndexPTile, connectionList) ! deallocate the memory because we already used the array to form distgrid
+
+      ! Create a new Grid object based on the newly created distribution grid (`DistGrid`)
+      grid = ESMF_GridCreate(distgrid, name="DRT-custom-"//trim(name), rc=rc)     !`distgrid` describes how the overall grid is partitioned into smaller subdomains!
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! access localDeCount of the final Grid, this would retrieve local decomposition count of the newly created grid.
+      call ESMF_GridGet(grid, localDeCount=localDeCount, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      
+      !! The `localDeCount` represents the number of decomposition elements (DEs) that are local to the current processing elements (PET).
+      !! This count is important for verifying that the grid has been properly decomposed and distributed. It provides insight into the 
+      !! workload distribution among the available PETs
+
+      write (msgString,*) "DART - InitializeP4: final Grid localDeCount = ", &
+        localDeCount
+      call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! Swap out the transferred for new Grid in "pmsl" Field
+      call ESMF_FieldEmptySet(field, grid=grid, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
 
 
 
