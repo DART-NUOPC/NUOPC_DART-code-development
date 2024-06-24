@@ -420,7 +420,87 @@ module esp_comp_nuopc
       call ESMF_LogWrite("DART - InitializeP4: grid transfer for importState", &
         ESMF_LOGMSG_INFO, rc=rc)
 
-      ! 
+      ! access the "temp" field in the importState and set the Grid 
+      call ESMF_StateGet(importState, field=field, itemName="temp", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      
+      ! construct a local Grid according to the transferred grid
+      call ESMF_FieldGet(field, grid=grid, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+        
+      call ESMF_GridGet(grid, distgrid=distgrid, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      call ESMF_DistGridGet(distgrid, dimCount=dimCount, tileCount=tileCount, &
+        connectionCount=connectionCount, regDecompFlag=regDecompFlag, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      
+      allocate(minIndexPTile(dimCount, tileCount), &
+        maxIndexPTile(dimCount, tileCount))
+      allocate(connectionList(connectionCount))
+
+      call ESMF_DistGridGet(distgrid, minIndexPTile=minIndexPTile, &
+        maxIndexPTile=maxIndexPTile, connectionList=connectionList, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      if (regDecompFlag) then
+        ! The provider used a regular decomposition (regDecomp) for the DistGrid:
+        ! This means that the entire grid is covered without any gaps,
+        ! so it is easiest to use a regular decomposition (regDecomp) on the receiving side too.
+
+        distgrid = ESMF_DistGridCreate(minIndexPTile=minIndexPTile, &
+          maxIndexPTile=maxIndexPTile, connectionList=connectionList, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+
+        grid = ESMF_GridCreate(distgrid, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+
+        ! now swap out the transferred grid for the newly created one
+        call ESMF_FieldEmptySet(field, grid=grid, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+
+        call ESMF_LogWrite("DART - Done with setting the Grid for `temp` field", &
+          ESMF_LOGMSG_INFO, rc=rc)
+      endif
+
+      deallocate(minIndexPTile, maxIndexPTile, connectionList)
+
+      call ESMF_LogWrite("DART - InitializeP4: DONE!", &
+        ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+    end subroutine
+
+
+
+
 
 
 
