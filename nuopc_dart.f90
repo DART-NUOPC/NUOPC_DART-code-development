@@ -148,7 +148,7 @@ module dart_comp_nuopc
   
   
   
-    subroutine InitializeRealize(dgcomp, rc)
+    subroutine RealizeProvided(dgcomp, rc)
       type(ESMF_GridComp)    :: dgcomp                    !< ESMF_GridComp object
       type(ESMF_State)       :: importState, exportState !< ESMF_State object for
                                                        !! import/export fields
@@ -247,7 +247,7 @@ module dart_comp_nuopc
         return ! bail out
 
 
-    end subroutine InitializeRealize
+    end subroutine RealizeProvided
     
 
     ! In this routine the DART component can access the transferred grid/mesh/locstream on the field that have "accept" value. 
