@@ -1,4 +1,4 @@
-module esp_comp_nuopc
+module dart_comp_nuopc
   ! this is a dummy DART Component to be used to temporarily build a dummy libesp.a
   
     use ESMF             , only : ESMF_VM, ESMF_VMBroadcast
@@ -485,6 +485,27 @@ module esp_comp_nuopc
 
         call ESMF_LogWrite("DART - Done with setting the Grid for `temp` field", &
           ESMF_LOGMSG_INFO, rc=rc)
+
+      else 
+
+        ! Directly use the provided grid
+        grid = ESMF_GridCreate(distgrid, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          file=__FILE__, &
+          line=__LINE__))&
+          return ! bail out
+
+        ! swap out the transferred grid for the newly created one
+        call ESMF_FieldEmptySet(field=field, grid=grid, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          file=__FILE__, &
+          line=__LINE__))&
+          return ! bail out
+        
+        call ESMF_LogWrite("DART - Just set Grid for 'temp' field using deBlock scheme", &
+          ESMF_LOGMSG_INFO, rc=rc)
+        
+        
       endif
 
       deallocate(minIndexPTile, maxIndexPTile, connectionList)
@@ -499,10 +520,178 @@ module esp_comp_nuopc
     end subroutine
 
 
+    !----------------------------------------------------------------------------------------------
+
+    subroutine RealizeAccepted(dgcomp, rc)
+      type(ESMF_GridComp)       :: dgcomp
+      integer, intent(out)      :: rc
+
+      ! local variables
+      type(ESMF_State)          :: importState, exportState
+      type(ESMF_Field)          :: field
+      type(ESMF_Grid)           :: grid
+      type(ESMF_Array)          :: array
+      character(80)             :: name
+      character(160)            :: msgString
+      integer                   :: staggerEdgeLWidth(2)
+      integer                   :: staggerEdgeUWidth(2)
+      integer                   :: staggerAlign(2)
+
+      rc = ESMF_SUCCESS
+      
+      ! query for the importState and exportState
+      call NUOPC_ModelGet(importState=importState, exportState=exportState, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
 
 
+      ! realize the 'temp' field in the importState
+      call NUOPC_Realize(importState, fieldName="temp", field=field, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! log a message about the field
+      if (ESMF_FieldIsCreated(field, rc=rc)) then
+        write (msgString, *) "DART - Just realized the 'temp' Field in importState."
+        call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+      else
+        write(msgString,*) "DART - 'temp' Field not realized in importState."
+        call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__)) &
+          return  ! bail out
+      endif
 
 
+#ifdef TEST_MULTI_TILE_GRID
+      ! write cubed sphere grid out to VTK
+
+      ! Get the grid associated with the field
+      call ESMF_FieldGet(field, grid=grid, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+
+      ! Write the grid to a VTK file for visualization
+      call ESMF_GridWriteVTK(grid, staggerloc=ESMF_STAGGERLOC_CENTER, &
+        filename="DART-accepted-Grid-temp_centers", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+#endif
+
+      
+      ! realize the "temp" field in the exportState with specified totalLWidth/totalLWidth
+      ! this is th halo region, the number of extra layers of grid points surrounding the
+      ! the computational domain. One shown below!
+      !  |-----|-----|-----|-----|-----|
+      !  | H11 | H12 | H13 | H14 | H15 |
+      !  |-----|-----|-----|-----|-----|
+      !  | H21 | G11 | G12 | G13 | H25 |
+      !  |-----|-----|-----|-----|-----|
+      !  | H31 | G21 | G22 | G23 | H35 |
+      !  |-----|-----|-----|-----|-----|
+      !  | H41 | G31 | G32 | G33 | H45 |
+      !  |-----|-----|-----|-----|-----|
+      !  | H51 | H52 | H53 | H54 | H55 |
+      !  |-----|-----|-----|-----|-----|
+
+      call NUOPC_Realize(exportState, fieldName="temp", &
+        totalLWidth=(/1,1/), totalUWidth=(/1,1/), field=field, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+      
+      ! log a message
+      if (ESMF_FieldIsCreated(field, rc)) then
+        write (msgString, *) "DART - Just realized the 'temp' Field in exportState."
+        call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__))&
+          return ! bail out 
+      else
+        write(msgString, *) "DART - 'temp' field not realized in exportState."
+        call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__))&
+          return ! bail out
+      endif
+
+      ! after realizing the fields which had accept grid as status, let's inspect the Grid name
+      call ESMF_FieldGet(field, grid=grid, rc=rc) 
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+      
+      call ESMF_GridGet(grid, name=name, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+      
+      write (msgString, *) "DART - InitializeP5: transferred Grid name = ", name
+      call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
+#if 1
+      ! write out the Grid into VTK file for inspection
+      call ESMF_GridWriteVTK(grid, staggerloc=ESMF_STAGGERLOC_CENTER, &
+        filename="DART-accepted-Grid-temp_centers", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      call ESMF_LogWrite("Done writing DART-accepted-Grid-temp_centers VTK", &
+        ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+#endif
+    end subroutine 
+        
+
+        ! representation of staggered grid
+        !*-------*-------*------ * |
+        !|       |       |       | |
+        !|  +    |   +   |   +   | |
+        !*------ *------ *------ * |
+        !|       |       |       | |
+        !|   +   |   +   |   +   | |
+        !*------ *------ *------ * |
+        !|       |       |       | |
+        !|    +  |   +   |   +   | |
+        !*------ *------ *------ * |
+        
+
+    subroutine DataInitialize(dgcomp, rc)
+      type(ESMF_GridComp)              ::
+      integer, intent(out)             ::
+
+      ! local variables
+      type(ESMF_State)                 ::
+      type(ESMF_Field)                 ::
+      real(kind=ESMF_KIND_R8), pointer ::
+      integer                          ::
+      integer                          ::
 
 
 
@@ -556,70 +745,9 @@ module esp_comp_nuopc
     endif
   end function ChkErr
   
-  end module esp_comp_nuopc
+end module dart_comp_nuopc
   
   
   
   
-  
-  !!! modified Realize subroutine !!!
-  !! To modify the RealizeProvided subroutine for a DART NUOPC cap where it's specifically designed 
-  !! to accept state variables from an ocean model on the same grid, we need to focus on the interaction 
-  !! where DART acts as a receiver of the grid and associated fields. The following modifications are 
-  !! tailored to reflect a scenario where DART realizes fields provided by the ocean model, using the 
-  !! ocean model's grid without altering it.
-  
-  subroutine RealizeProvided(model, rc)
-    type(ESMF_GridComp)  :: model
-    integer, intent(out) :: rc
-  
-    ! Local variables
-    type(ESMF_State)        :: importState, exportState
-    type(ESMF_Field)        :: field
-    type(ESMF_Grid)         :: receivedGrid
-    character(ESMF_MAXSTR)  :: transferAction
-  
-    rc = ESMF_SUCCESS
-  
-    ! Retrieve import and export states from the model
-    call NUOPC_ModelGet(model, importState=importState, &
-      exportState=exportState, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, file=__FILE__)) return
-  
-    ! Iterate through key fields that DART will use from the ocean model
-    ! Example: Sea Surface Temperature (SST)
-    call ESMF_StateGet(importState, field=field, itemName="sst", rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, file=__FILE__)) return
-  
-    ! Check the transfer action to confirm if the ocean model is providing the grid
-    call NUOPC_GetAttribute(field, name="ConsumerTransferAction", &
-      value=transferAction, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, file=__FILE__)) return
-  
-    ! Accept the grid only if the action is 'provide'
-    if (trim(transferAction) == "provide") then
-      ! Get the grid associated with the field
-      call ESMF_FieldGet(field, grid=receivedGrid, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, file=__FILE__)) return
-  
-      ! Log that DART is accepting the grid
-      call ESMF_LogWrite("DART is accepting the provided Grid for Field 'sst'.", &
-        ESMF_LOGMSG_INFO, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, file=__FILE__)) return
-  
-      ! Realize the field on the received grid
-      call NUOPC_Realize(importState, field=field, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, file=__FILE__)) return
-    endif
-  
-    ! Additional fields can be handled similarly
-    ! Include handling for other fields such as Sea Surface Salinity (SSS) or others
-  
-  end subroutine
   
