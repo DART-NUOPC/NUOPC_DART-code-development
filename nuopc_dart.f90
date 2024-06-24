@@ -123,18 +123,20 @@ module esp_comp_nuopc
         file=__FILE__))&
         return ! bail out
       
-      ! query model grid
-      call NUOPC_ModelGet(dgcomp, grid=modelGrid, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LogFoundError, &
-        line=__LINE__, &
-        file=__FILE__))&
-        return ! bail out
   
   
       ! If it founds a import and export state then the following code would execute
       call NUOPC_Advertise(importState, &
         StandardName="temperature", name="temp", &
-        TransferOfferGeomObject="can provide", rc=rc)
+        TransferOfferGeomObject="cannot provide", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
+      call NUOPC_Advertise(exportState, &
+        StandardName="temperature", name="temp", &
+        TransferOfferGeomObject="cannot provide", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
@@ -402,12 +404,25 @@ module esp_comp_nuopc
         file=__FILE__)) &
         return  ! bail out
 
-      ! Swap out the transferred for new Grid in "pmsl" Field
+      ! Swap out the transferred for new Grid in "temp" Field
       call ESMF_FieldEmptySet(field, grid=grid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
+
+      !! The grid received from another model component is tailored to the computational resources and domain decomposition of the sending model. 
+      !! However, to optimize performance and ensure compatibility with the receiving model's computational framework, the grid often needs to be customized.
+      !! This is the reason to swap the trsnferred grid to the new grid created.
+
+      !------------- transferred grids in the importState ----------------------------------------------------
+
+      call ESMF_LogWrite("DART - InitializeP4: grid transfer for importState", &
+        ESMF_LOGMSG_INFO, rc=rc)
+
+      ! 
+
+
 
 
 
