@@ -78,27 +78,42 @@ module dart_comp_nuopc
         file=__FILE__)) &
         return ! bail out
   
-      call NUOPC_CompSpecialize(dgcomp, specLabel=label_RealizrProvided, &
-        specRoutine=InitializeRealize, rc=rc)
+      call NUOPC_CompSpecialize(dgcomp, specLabel=label_RealizeProvided, &
+        specRoutine=RealizeProvided, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return ! bail out
   
+      call NUOPC_CompSpecialize(dgcomp, specLabel=label_AcceptTransfer, &
+        specRoutine=AcceptTransfer, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+  
+      call NUOPC_CompSpecialize(dgcomp, specLabel=label_RealizeAccepted, &
+        specRoutine=RealizeAccepted, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+      
+      call NUOPC_CompSpecialize(dgcomp, specLabel=label_DataInitialize, &
+        specRoutine=DataInitialize, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
       call NUOPC_CompSpecialize(dgcomp, specLabel=label_Advance, &
-        specRoutine=Advance, rc=rc)
+        specRoutine=ModelAdvance, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
         return ! bail out
-  
-      call NUOPC_CompSpecialize(dgcomp, specLabel=label_Finalize, &
-        specRoutine=Finalize, rc=rc)
-      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-        line=__LINE__, &
-        file=__FILE__))&
-        return ! bail out
-  
+
+        
     end subroutine SetServices
   
   
@@ -770,13 +785,19 @@ module dart_comp_nuopc
 
 
     subroutine ModelAdvance(dgcomp, rc)
+
+      ! OpenMP directive to create a parallel region where multiple threads can execute the same enclosed piece of code simultaneously.
 !$ use omp_lib
       type(ESMF_GridComp)  :: dgcomp
       integer, intent(out) :: rc
 
       ! local variables
       type(ESMF_State)     :: importState, exportState
-      type(ESMF_Clock)     :: clock
+      type(ESMF_Clock)     :: clock                                       ! Each NUOPC component maintains its own clock (an ESMF_Clock object)
+                                                                          ! The clock is used here to indicate the current model time and the timestep size.
+                                                                          ! When the subroutine finishes, your model should be moved ahead in time from
+                                                                          ! the current time by one timestep. NUOPC will automatically advance the clock 
+                                                                          ! for you, so there is no explicit call to do that here.
       integer, save        :: slice
       type(ESMF_VM)        :: vm
       integer              :: currentSsiPe, i, tid, unit, localPet
@@ -785,7 +806,8 @@ module dart_comp_nuopc
       rc = ESMF_SUCCESS
       slice = 1
   
-      ! Query for the clock, importState and exportState
+      ! Query for the clock, importState and exportState, because import/export states and clock do not come in through the parameter list,
+      ! they must be accessed via a call to NUOPC_ModelGet 
       call NUOPC_ModelGet(dgcomp, modelClock= clock, importState=importState, &
         exportState=exportState, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -823,8 +845,8 @@ module dart_comp_nuopc
 
 
 !$omp parallel private(tid)
-        tid = -1 ! initialize to obvious value if building without OpenMP
-!$      tid = opm_get_thread_num() 
+        tid = -1 ! This is a placeholder value in case the code is compiled without OpenMP support.
+!$ tid = opm_get_thread_num() ! this directive sets `tid` to the thread number of current thread. Each thread gets a unique number ranging from 0 to `omp_get_num_threads() -1` 
 
 !$omp do
         do i=1,100
