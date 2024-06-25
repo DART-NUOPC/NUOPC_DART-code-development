@@ -767,52 +767,137 @@ module dart_comp_nuopc
 
 
 
-    subroutine ModelAdvance(gcomp, importState, exportState, clock, rc)
-      type(ESMF_GridComp) :: gcomp
-      type(ESMF_State) :: importState, exportState
-      type(ESMF_Clock) :: clock
+    subroutine ModelAdvance(dgcomp, rc)
+!$ use omp_lib
+      type(ESMF_GridComp)  :: dgcomp
       integer, intent(out) :: rc
+
+      ! local variables
+      type(ESMF_State)     :: importState, exportState
+      type(ESMF_Clock)     :: clock
+      integer, save        :: slice
+      type(ESMF_VM)        :: vm
+      integer              :: currentSsiPe, i, tid, unit, localPet
+      character(len=160)   :: msgString
   
       rc = ESMF_SUCCESS
+      slice = 1
   
-      ! Import data
-      call ESMF_StateGet(importState, "temperature", temperatureData, rc=rc)
-      if (ChkErr(rc,__LINE__,__FILE__)) return
-  
-      ! Process data (e.g., model time-stepping, physics)
-      call ModelStep(temperatureData, processedData, rc=rc)
-      if (ChkErr(rc,__LINE__,__FILE__)) return
-  
-      ! Export data
-      call ESMF_StateSet(exportState, "temperature", processedData, rc=rc)
-      if (ChkErr(rc,__LINE__,__FILE__)) return
-    end subroutine ModelAdvance
+      ! Query for the clock, importState and exportState
+      call NUOPC_ModelGet(dgcomp, modelClock= clock, importState=importState, &
+        exportState=exportState, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
+      ! Retrieve the virtual machine (vm) associated with the DART
+      call ESMF_GridCompGet(dgcomp, vm=vm, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+      
+      ! Retrieve the local processor element (localPet) in the parallel environment.
+      call ESMF_VMGet(vm, localPet=localPet, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
+      ! Now can use OpenMP for fine grained parallelism...
+      ! Here just write info about the PET-local OpenMP threads to Log.
+!$omp parallel private(msgString, currentSsiPe)
+!$omp critical
+!$    call ESMF_VMGet(vm, currentSsiPe=currentSsiPe)
+!$    write(msgString,'(A,I4,A,I4,A,I4,A,I4,A,I4)') &
+!$      "thread_num=", omp_get_thread_num(), &
+!$      "   currentSsiPe=", currentSsiPe, &
+!$      "   num_threads=", omp_get_num_threads(), &
+!$      "   max_threads=", omp_get_max_threads(), &
+!$      "   num_procs=", omp_get_num_procs()
+!$    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+!$omp end critical
+
+
+!$omp parallel private(tid)
+        tid = -1 ! initialize to obvious value if building without OpenMP
+!$      tid = opm_get_thread_num() 
+
+!$omp do
+        do i=1,100
+          write(unit,*)"DART test write, localPet=", localPet, " tid=", tid, &
+            "  slice=", slice, " . i=",i
+        enddo
+!$omp end parallel
+
+    ! HERE THE MODEL ADVANCES: currTime -> currTime + timeStep
+
+    ! Because of the way that the internal Clock was set in SetClock(),
+    ! its timeStep is likely smaller than the parent timeStep. As a consequence
+    ! the time interval covered by a single parent timeStep will result in
+    ! multiple calls to the Advance() routine. Every time the currTime
+    ! will come in by one internal timeStep advanced. This goes until the
+    ! stopTime of the internal Clock has been reached.
+
     
-    ! Finalization phase invloves cleaning up the resources
-    subroutine Finalize(gcomp, rc)
-      type(ESMF_GridComp) :: gcomp
-      integer, intent(out) :: rc
+    call ESMF_ClockPrint(clock, options="currTime", &
+    preString="------>Advancing DART from: ", unit=msgString, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    
+    call ESMF_ClockPrint(clock, options="stopTime", &
+      preString="--------------------------------> to: ", unit=msgString, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    
+    ! write out the fields in the importState and exportState
+#ifdef TEST_MULTI_TILE_GRID
+    call NUOPC_Write(importState, fileNamePrefix="field_DART_import_", &
+      timeslice=slice, overwrite=.true., relaxedflag=.true., rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+#endif
+
+    call NUOPC_Write(exportState, fileNamePrefix="field_DART_export_", &
+      timeslice=slice, overwrite=.true., relaxedflag=.true., rc=rc)
+    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+      line=__LINE__, &
+      file=__FILE__)) &
+      return  ! bail out
+    
+    slice = slice+1
+    end subroutine ModelAdvance
   
-      rc = ESMF_SUCCESS
   
-      ! Finalize model component
-      call ESMF_Finalize(gcomp, rc=rc)
-      if (ChkErr(rc,__LINE__,__FILE__)) return
-    end subroutine Finalize
-  
-  
-  !> Returns true if ESMF_LogFoundError() determines that rc is an error code. Otherwise false.
-  logical function ChkErr(rc, line, file)
-    integer, intent(in) :: rc            !< return code to check
-    integer, intent(in) :: line          !< Integer source line number
-    character(len=*), intent(in) :: file !< User-provided source file name
-    integer :: lrc
-    ChkErr = .false.
-    lrc = rc
-    if (ESMF_LogFoundError(rcToCheck=lrc, msg=ESMF_LOGERR_PASSTHRU, line=line, file=file)) then
-      ChkErr = .true.
-    endif
-  end function ChkErr
+  ! !> Returns true if ESMF_LogFoundError() determines that rc is an error code. Otherwise false.
+  ! logical function ChkErr(rc, line, file)
+  !   integer, intent(in) :: rc            !< return code to check
+  !   integer, intent(in) :: line          !< Integer source line number
+  !   character(len=*), intent(in) :: file !< User-provided source file name
+  !   integer :: lrc
+  !   ChkErr = .false.
+  !   lrc = rc
+  !   if (ESMF_LogFoundError(rcToCheck=lrc, msg=ESMF_LOGERR_PASSTHRU, line=line, file=file)) then
+  !     ChkErr = .true.
+  !   endif
+  ! end function ChkErr
   
 end module dart_comp_nuopc
   
