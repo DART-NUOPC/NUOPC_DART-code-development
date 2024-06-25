@@ -683,18 +683,87 @@ module dart_comp_nuopc
         
 
     subroutine DataInitialize(dgcomp, rc)
-      type(ESMF_GridComp)              ::
-      integer, intent(out)             ::
+
+      ! Retrieves the `exportState` from the DART component.          !
+      ! Initializes the fields (here "temp") with appropriate values. !
+      ! Writes the initialized fields to NetCDF files.                !
+      ! Indicates that data initialization is complete.               !
+      
+      type(ESMF_GridComp)              :: dgcomp
+      integer, intent(out)             :: rc
 
       ! local variables
-      type(ESMF_State)                 ::
-      type(ESMF_Field)                 ::
-      real(kind=ESMF_KIND_R8), pointer ::
-      integer                          ::
-      integer                          ::
+      type(ESMF_State)                 :: exportState
+      type(ESMF_Field)                 :: field
+      real(kind=ESMF_KIND_R8), pointer :: dataPtr(:,:)          ! pointer to the data array within the field.
+      integer                          :: i, j
+      integer                          :: localDe, localDeCount ! local decomposition elements and their count.
+
+      ! Initialization of the Return Code
+      rc = ESMF_SUCCESS
 
 
+      ! retrieve the model state
+      call NUOPC_ModelGet(dgcomp, exportState=exportState, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+      
+      ! retrieve the temperature field
+      call ESMF_StateGet(exportState, field=field, itemName="temp", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+      
+      ! Initialize the data - retrieves the count of local decomposition elements and the data pointer.
+      call ESMF_FieldGet(field, localDeCount=localDeCount, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+      
+      ! Initializes the data for each element. It loops over the local decomposition elements (local DEs) of the field,
+      ! retrieves the data pointers for each DE, and initializes the data in those pointers.
+      ! The loop iterates over all local decomposition elements assigned to the current processor.
+      do localDe=0, localDeCount-1
+        call ESMF_FieldGet(field, localDe=localDe, farrayPtr=dataPtr, rc=rc)
+        if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+          line=__LINE__, &
+          file=__FILE__))&
+          return ! bail out
+        
+        ! Inner loop, it iterate over the dimensions of the data array and initialize each element.
+        do j=lbound(dataPtr, 2), ubound(dataPtr, 2)
+          dataPtr(:,j) = real(j)
+        enddo
+      enddo
 
+      ! output the file
+      call NUOPC_Write(field, fileName="field_DART_init_export_temp.nc", &
+        status=ESMF_FILESTATUS_REPLACE, relaxedflag=.true., rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
+      ! set updated
+      call NUOPC_SetAttribute(field, name="UPDATED", value="true", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
+      ! indicate that data initialization is complete (breaking out of init-loop)
+      call NUOPC_CompAttributeSet(dgcomp, &
+        name="InitializeDataComplete", value="true", rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__))&
+        return ! bail out
+
+    end subroutine DataInitialize
 
 
 
