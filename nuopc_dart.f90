@@ -1,3 +1,5 @@
+#define TEST_MULTI_TILE_GRID
+
 module dart_comp_nuopc
   ! this is a dummy DART Component to be used to temporarily build a dummy libesp.a
   
@@ -841,48 +843,48 @@ module dart_comp_nuopc
     ! stopTime of the internal Clock has been reached.
 
     
-    call ESMF_ClockPrint(clock, options="currTime", &
-    preString="------>Advancing DART from: ", unit=msgString, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
-    call ESMF_ClockPrint(clock, options="stopTime", &
-      preString="--------------------------------> to: ", unit=msgString, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+      call ESMF_ClockPrint(clock, options="currTime", &
+      preString="------>Advancing DART from: ", unit=msgString, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      
+      call ESMF_ClockPrint(clock, options="stopTime", &
+        preString="--------------------------------> to: ", unit=msgString, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
     
     ! write out the fields in the importState and exportState
-#ifdef TEST_MULTI_TILE_GRID
-    call NUOPC_Write(importState, fileNamePrefix="field_DART_import_", &
-      timeslice=slice, overwrite=.true., relaxedflag=.true., rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
+#ifndef TEST_MULTI_TILE_GRID
+      call NUOPC_Write(importState, fileNamePrefix="field_DART_import_", &
+        timeslice=slice, overwrite=.true., relaxedflag=.true., rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
 #endif
 
-    call NUOPC_Write(exportState, fileNamePrefix="field_DART_export_", &
-      timeslice=slice, overwrite=.true., relaxedflag=.true., rc=rc)
-    if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
-      line=__LINE__, &
-      file=__FILE__)) &
-      return  ! bail out
-    
-    slice = slice+1
+      call NUOPC_Write(exportState, fileNamePrefix="field_DART_export_", &
+        timeslice=slice, overwrite=.true., relaxedflag=.true., rc=rc)
+      if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
+        line=__LINE__, &
+        file=__FILE__)) &
+        return  ! bail out
+      
+      slice = slice+1
     end subroutine ModelAdvance
   
   
