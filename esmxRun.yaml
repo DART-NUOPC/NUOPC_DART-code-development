@@ -16,7 +16,16 @@ ESMX:
       @21600
         OCN -> DART
         DART -> OCN
+        DART
         OCN
+      @
+      
+      @21600
+        OCN->DART
+        DART
+        DART->OCN
+      @1800
+         OCN
       @
 
 attributes: &common # define an anchor so it can be used by multiple components
