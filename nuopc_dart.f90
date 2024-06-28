@@ -158,7 +158,12 @@ module dart_comp_nuopc
         line=__LINE__, &
         file=__FILE__))&
         return ! bail out
-  
+
+      !! The NUOPC Layer transfer protocol for GeomObjects is based on two field attributes-
+      !! TransferOfferGeomObject and TransferActionGeomObject. The TransferOfferGeomObject attribute 
+      !! is used by the Model and/or Mediator component, in this case Model component, to indicate
+      !! for each Field thier intent for the associated GeomObject. The predefined values of this
+      !! attribute are: "will provide", "can provide", and "cannot provide". 
       
     end subroutine InitializeAdvertise
   
