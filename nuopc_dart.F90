@@ -208,8 +208,8 @@ module dart_comp_nuopc
         file=__FILE__))&
         return ! bail out
   
-      call NUOPC_GetAttribute(field, name="ConsumerTransferAction", &
-        value=transferAction, rc=rc)
+      call NUOPC_GetAttribute(field, "ConsumerTransferAction", &
+        transferAction, rc)  ! HK fudge, removed = on arguments to compile
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
@@ -636,7 +636,7 @@ module dart_comp_nuopc
         return ! bail out
       
       ! log a message
-      if (ESMF_FieldIsCreated(field, rc)) then
+      if (ESMF_FieldIsCreated(field, rc=rc)) then
         write (msgString, *) "DART - Just realized the 'temp' Field in exportState."
         call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
