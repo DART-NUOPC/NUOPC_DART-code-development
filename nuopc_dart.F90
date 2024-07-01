@@ -3,7 +3,7 @@
 module dart_comp_nuopc
   ! this is a dummy DART Component to be used to temporarily build a dummy libesp.a
  
-    use ESMF
+    use ESMF  !  HK might be best to have use ESMF, use NUOPC while developing
 
     use ESMF             , only : ESMF_VM, ESMF_VMBroadcast
     use ESMF             , only : ESMF_Mesh, ESMF_GridComp, ESMF_SUCCESS, ESMF_LogWrite
@@ -23,12 +23,16 @@ module dart_comp_nuopc
     use NUOPC            , only : NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
     use NUOPC            , only : NUOPC_CompAttributeGet, NUOPC_Advertise
     use NUOPC            , only : NUOPC_CompFilterPhaseMap
-    
-    
-    use NUOPC_Model      , only : model_routine_SS        => SetServices
-    use NUOPC_Model      , only : model_label_Advance     => label_Advance
-    use NUOPC_Model      , only : model_label_SetRunClock => label_SetRunClock
-    use NUOPC_Model      , only : model_label_Finalize    => label_Finalize
+    use NUOPC, only : NUOPC_Write ! HK what is the write for?
+    use NUOPC, only : NUOPC_SetAttribute, NUOPC_CompAttributeSet, NUOPC_Realize
+
+    !HK three of these rename on import did not seem to work, using the model_ version for now
+    use NUOPC_Model, model_routine_SS        => SetServices 
+    use NUOPC_Model, model_label_Advance     => label_Advance  !HK model_label_Advance
+    use NUOPC_Model, model_label_SetRunClock => label_SetRunClock 
+    use NUOPC_Model, model_label_Finalize    => label_Finalize
+    use NUOPC_Model, model_label_Advertise    => label_Advertise !HK model_label_Advertise
+    use NUOPC_Model, model_label_AcceptTransfer    => label_AcceptTransfer  !HK model_label_AcceptTransfer
     use NUOPC_Model      , only : NUOPC_ModelGet, setVM
   
     implicit none
@@ -71,7 +75,7 @@ module dart_comp_nuopc
          return ! bail out
   
       ! specialize the derived grid component, in this case dart grid component
-      call NUOPC_CompSpecialize(dgcomp, specLabel=label_Advertise, &
+      call NUOPC_CompSpecialize(dgcomp, specLabel=model_label_Advertise, &
         specRoutine=InitializeAdvertise, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -85,7 +89,7 @@ module dart_comp_nuopc
         file=__FILE__)) &
         return ! bail out
   
-      call NUOPC_CompSpecialize(dgcomp, specLabel=label_AcceptTransfer, &
+      call NUOPC_CompSpecialize(dgcomp, specLabel=model_label_AcceptTransfer, &
         specRoutine=AcceptTransfer, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -106,7 +110,7 @@ module dart_comp_nuopc
         file=__FILE__))&
         return ! bail out
 
-      call NUOPC_CompSpecialize(dgcomp, specLabel=label_Advance, &
+      call NUOPC_CompSpecialize(dgcomp, specLabel=model_label_Advance, &
         specRoutine=ModelAdvance, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -333,7 +337,7 @@ module dart_comp_nuopc
 
       ! access localDeCount to show this is a real Grid. By checking `localDeCount`, the code verifies that the grid is not just
       ! an empty placeholder but a real, decomposed grid. The logged `localDeCount` helps confirm this in the log output.
-      call ESMG_GridGet(grid, localDeCount=localDeCount, distgrid=distgrid, rc=rc)
+      call ESMF_GridGet(grid, localDeCount=localDeCount, distgrid=distgrid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
@@ -377,7 +381,7 @@ module dart_comp_nuopc
 
       ! get minIndex and maxIndex arrays to populate memory that allocated above!
       call ESMF_DistGridGet(distgrid, maxIndexPTile=maxIndexPTile, &
-        minIndexPTile=minIndexPTile, connectionList=connectionCount, rc=rc)
+        minIndexPTile=minIndexPTile, connectionList=connectionList, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
