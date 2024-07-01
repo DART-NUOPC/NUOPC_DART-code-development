@@ -24,7 +24,7 @@ module dart_comp_nuopc
     use NUOPC            , only : NUOPC_CompAttributeGet, NUOPC_Advertise
     use NUOPC            , only : NUOPC_CompFilterPhaseMap
     use NUOPC, only : NUOPC_Write ! HK what is the write for?
-    use NUOPC, only : NUOPC_SetAttribute, NUOPC_CompAttributeSet, NUOPC_Realize
+    use NUOPC, only : NUOPC_SetAttribute, NUOPC_CompAttributeSet, NUOPC_Realize, NUOPC_GetAttribute
 
     !HK three of these rename on import did not seem to work, using the model_ version for now
     use NUOPC_Model, model_routine_SS        => SetServices 
@@ -208,8 +208,8 @@ module dart_comp_nuopc
         file=__FILE__))&
         return ! bail out
   
-      call NUOPC_GetAttribute(field, "ConsumerTransferAction", &
-        transferAction, rc)  ! HK fudge, removed = on arguments to compile
+      call NUOPC_GetAttribute(field, name="ConsumerTransferAction", &
+        value=transferAction, rc=rc)  ! HK fudge, removed = on arguments to compile
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
