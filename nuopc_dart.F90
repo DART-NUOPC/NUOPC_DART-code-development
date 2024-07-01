@@ -561,7 +561,7 @@ module dart_comp_nuopc
       rc = ESMF_SUCCESS
       
       ! query for the importState and exportState
-      call NUOPC_ModelGet(importState=importState, exportState=exportState, rc=rc)
+      call NUOPC_ModelGet(dgcomp, importState=importState, exportState=exportState, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
