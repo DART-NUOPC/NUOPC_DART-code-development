@@ -1,0 +1,45 @@
+20240705 150042.899 INFO             PET0 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+20240705 150042.899 INFO             PET0 !!! THE ESMF_LOG IS SET TO OUTPUT ALL LOG MESSAGES !!!
+20240705 150042.899 INFO             PET0 !!!     THIS MAY CAUSE SLOWDOWN IN PERFORMANCE     !!!
+20240705 150042.899 INFO             PET0 !!! FOR PRODUCTION RUNS, USE:                      !!!
+20240705 150042.899 INFO             PET0 !!!                   ESMF_LOGKIND_Multi_On_Error  !!!
+20240705 150042.899 INFO             PET0 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+20240705 150042.899 INFO             PET0 Running with ESMF Version   : 8.6.0
+20240705 150042.899 INFO             PET0 ESMF library build date/time: "Nov 20 2023" "11:10:51"
+20240705 150042.899 INFO             PET0 ESMF library build location : /glade/derecho/scratch/csgteam/temp/spack/derecho/23.09/builds/spack-stage-esmf-8.6.0-7haaso22ipunviijwusfh76e7xqyfycd/spack-src
+20240705 150042.899 INFO             PET0 ESMF_COMM                   : mpi
+20240705 150042.899 INFO             PET0 ESMF_MOAB                   : enabled
+20240705 150042.899 INFO             PET0 ESMF_LAPACK                 : enabled
+20240705 150042.899 INFO             PET0 ESMF_NETCDF                 : enabled
+20240705 150042.899 INFO             PET0 ESMF_PNETCDF                : enabled
+20240705 150042.899 INFO             PET0 ESMF_PIO                    : enabled
+20240705 150042.899 INFO             PET0 ESMF_YAMLCPP                : enabled
+20240705 150042.900 INFO             PET0 =============================================
+20240705 150042.900 INFO             PET0 ESMX (Earth System Model eXecutable) STARTING
+20240705 150042.900 INFO             PET0 =============================================
+20240705 150042.905 INFO             PET0 ESMX_Driver: InitializeGeneric intro.
+20240705 150042.905 INFO             PET0   ESMX_Driver: InitializeP0 intro.
+20240705 150042.905 INFO             PET0   ESMX_Driver: InitializeP0 extro.
+20240705 150042.905 INFO             PET0   ESMX_Driver: InitializeIPDv02p1 intro.
+20240705 150042.906 INFO             PET0     >>>ESMX_Driver: entered Initialize (phase=<none>) without valid internal Clock.
+20240705 150042.907 INFO             PET0     ESMX_Driver - Creating model component DART with petList of size 4 :
+20240705 150042.907 INFO             PET0           0      1      2      3
+20240705 150042.907 DEBUG            PET0     Generic SetVM() is executing for: DART
+20240705 150042.907 DEBUG            PET0     Generic SetVM() is calling ESMF_GridCompSetVMMaxPEs() for: DART with:
+20240705 150042.907 DEBUG            PET0      -             MaxCount =          4
+20240705 150042.907 DEBUG            PET0      -       OpenMpHandling =
+20240705 150042.907 DEBUG            PET0      -     OpenMpNumThreads =         -1
+20240705 150042.907 DEBUG            PET0      -   ForceChildPthreads =          F
+20240705 150042.907 DEBUG            PET0      -  PthreadMinStackSize =         -1
+20240705 150042.910 INFO             PET0     (DART_cap:SetServices) called
+20240705 150042.916 INFO             PET0     ESMX_Driver - Creating model component OCN with petList of size 4 :
+20240705 150042.916 INFO             PET0           0      1      2      3
+20240705 150042.931 ERROR            PET0 ESMCI_FTable.C:254 c_esmc_setvmshobj     Invalid argument  - shared object not found
+20240705 150042.931 ERROR            PET0 ESMF_GridComp.F90:3029 ESMF_GridCompSetVMShObj     Invalid argument  - Internal subroutine call returned Error
+20240705 150042.931 ERROR            PET0 src/addon/NUOPC/src/NUOPC_Comp.F90:4265     Invalid argument  - Passing error in return code
+20240705 150042.931 ERROR            PET0 ESMX_Driver:src/addon/NUOPC/src/NUOPC_Driver.F90:4947     Invalid argument  - Passing error in return code
+20240705 150042.931 ERROR            PET0 src/addon/ESMX/ESMX_Driver.F90:335     Invalid argument  - Unable to add component 'OCN' to driver via shared object: CDEPS
+20240705 150042.932 ERROR            PET0 ESMX_Driver:src/addon/NUOPC/src/NUOPC_Driver.F90:797     Invalid argument  - Passing error in return code
+20240705 150042.932 ERROR            PET0 ESMX_Driver:src/addon/NUOPC/src/NUOPC_Driver.F90:486     Invalid argument  - Passing error in return code
+20240705 150042.932 ERROR            PET0 src/addon/ESMX/ESMF_App.F90:216     Invalid argument  - Passing error in return code
+20240705 150042.932 INFO             PET0      Finalizing ESMF with endflag==ESMF_END_ABORT

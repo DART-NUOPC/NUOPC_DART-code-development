@@ -1,0 +1,2 @@
+/usr/bin/ar qc libesmx_driver.a CMakeFiles/esmx_driver.dir/ESMX_Driver.F90.o
+/usr/bin/ranlib libesmx_driver.a
