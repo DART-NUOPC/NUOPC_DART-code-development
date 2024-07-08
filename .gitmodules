@@ -1,4 +1,0 @@
-[submodule "DART"]
-	path = DART
-	url = https://github.com/DART-NUOPC/DART.git
-	branch = dartlib_nuopc_cap
