@@ -6,15 +6,15 @@ module dart_comp_nuopc
     use ESMF  !  HK might be best to have use ESMF, use NUOPC while developing
 
     use ESMF             , only : ESMF_VM, ESMF_VMBroadcast
-    use ESMF             , only : ESMF_Mesh, ESMF_GridComp, ESMF_SUCCESS, ESMF_LogWrite
+    use ESMF             , only : ESMF_Mesh, ESMF_Grid, ESMF_GridComp, ESMF_SUCCESS, ESMF_LogWrite
     use ESMF             , only : ESMF_GridCompSetEntryPoint, ESMF_METHOD_INITIALIZE
-    use ESMF             , only : ESMF_MethodRemove, ESMF_State, ESMF_Clock, ESMF_TimeInterval
+    use ESMF             , only : ESMF_MethodRemove, ESMF_Clock, ESMF_TimeInterval
     use ESMF             , only : ESMF_State, ESMF_Field, ESMF_LOGMSG_INFO, ESMF_ClockGet
     use ESMF             , only : ESMF_Time, ESMF_Alarm, ESMF_TimeGet, ESMF_TimeInterval
 !    use ESMF             , only : operator(+), ESMF_TimeIntervalGet, ESMF_ClockGetAlarm
-    use ESMF             , only : ESMF_TimeIntervalGet, ESMF_ClockGetAlarm
+    use ESMF             , only : ESMF_TimeIntervalGet
     use ESMF             , only : ESMF_AlarmIsRinging, ESMF_AlarmRingerOff, ESMF_StateGet
-    use ESMF             , only : ESMF_FieldGet, ESMF_MAXSTR, ESMF_VMBroadcast
+    use ESMF             , only : ESMF_FieldGet, ESMF_MAXSTR
     use ESMF             , only : ESMF_TraceRegionEnter, ESMF_TraceRegionExit, ESMF_GridCompGet
     use ESMF             , only : ESMF_KIND_R8, ESMF_LogFoundError
     use ESMF             , only : ESMF_LOGERR_PASSTHRU, ESMF_LOGWRITE
@@ -148,7 +148,7 @@ module dart_comp_nuopc
   
       ! If it founds a import and export state then the following code would execute
       call NUOPC_Advertise(importState, &
-        StandardName="temperature", name="temp", &
+        StandardName="sea_surface_temperature", name="temp", &
         TransferOfferGeomObject="cannot provide", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -156,7 +156,7 @@ module dart_comp_nuopc
         return ! bail out
 
       call NUOPC_Advertise(exportState, &
-        StandardName="temperature", name="temp", &
+        StandardName="sea_surface_temperature", name="sst", &
         TransferOfferGeomObject="cannot provide", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -202,7 +202,7 @@ module dart_comp_nuopc
       gridOut = gridIn ! grid in should be equal to grid out
   
       ! Get field from the import state
-      call ESMF_StateGet(importState, field=field, itemName="temp", rc=rc)
+      call ESMF_StateGet(importState, field=field, itemName="sst", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, & 
         file=__FILE__))&
@@ -215,8 +215,8 @@ module dart_comp_nuopc
         file=__FILE__))&
         return ! bail out
       if (trim(transferAction)=="provide") then
-        ! the Connector instructed the DART to provide the Grid object for "temp"
-        call ESMF_LOGWRITE("DART is providing Grid for Field 'temp'.", &
+        ! the Connector instructed the DART to provide the Grid object for "sst"
+        call ESMF_LOGWRITE("DART is providing Grid for Field 'sst'.", &
           ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
@@ -229,8 +229,8 @@ module dart_comp_nuopc
           file=__FILE__))&
           return ! bail out
       else ! transferAction=="accept"
-        ! the connector instructed the DART to accept the Grid from OCN for "temp"
-        call ESMF_LOGWRITE("DART is accepting Grid for the Field 'temp'.", &
+        ! the connector instructed the DART to accept the Grid from OCN for "sst"
+        call ESMF_LOGWRITE("DART is accepting Grid for the Field 'sst'.", &
           ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
@@ -304,18 +304,18 @@ module dart_comp_nuopc
         file=__FILE__)) &
         return  ! bail out
 
-      ! accecc the "temp" field in the exportState, and ESMF_StateGet is a function to retrieve a field 
+      ! accecc the "sst" field in the exportState, and ESMF_StateGet is a function to retrieve a field 
       ! from a state (in this case exportState). When it is called it searches for a field with the name
-      ! "temp" within exportState. If the field is found, it is assigned to the variable 'field'. This means
-      ! 'field' now references the "temp" field from the exportState.
-      call ESMF_StateGet(exportState, field=field, itemName="temp", rc=rc)
+      ! "sst" within exportState. If the field is found, it is assigned to the variable 'field'. This means
+      ! 'field' now references the "sst" field from the exportState.
+      call ESMF_StateGet(exportState, field=field, itemName="sst", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
 
       ! while this is still an empty field, it hold a Grid with DistGrid. This step would retrieve the grid 
-      ! associated with the 'field' (which is now "temp")
+      ! associated with the 'field' (which is now "sst")
       call ESMF_FieldGet(field, grid=grid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -425,7 +425,7 @@ module dart_comp_nuopc
         file=__FILE__)) &
         return  ! bail out
 
-      ! Swap out the transferred for new Grid in "temp" Field
+      ! Swap out the transferred for new Grid in "sst" Field
       call ESMF_FieldEmptySet(field, grid=grid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -441,8 +441,8 @@ module dart_comp_nuopc
       call ESMF_LogWrite("DART - InitializeP4: grid transfer for importState", &
         ESMF_LOGMSG_INFO, rc=rc)
 
-      ! access the "temp" field in the importState and set the Grid 
-      call ESMF_StateGet(importState, field=field, itemName="temp", rc=rc)
+      ! access the "sst" field in the importState and set the Grid 
+      call ESMF_StateGet(importState, field=field, itemName="sst", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
@@ -504,7 +504,7 @@ module dart_comp_nuopc
           file=__FILE__)) &
           return  ! bail out
 
-        call ESMF_LogWrite("DART - Done with setting the Grid for `temp` field", &
+        call ESMF_LogWrite("DART - Done with setting the Grid for `sst` field", &
           ESMF_LOGMSG_INFO, rc=rc)
 
       else 
@@ -523,7 +523,7 @@ module dart_comp_nuopc
           line=__LINE__))&
           return ! bail out
         
-        call ESMF_LogWrite("DART - Just set Grid for 'temp' field using deBlock scheme", &
+        call ESMF_LogWrite("DART - Just set Grid for 'sst' field using deBlock scheme", &
           ESMF_LOGMSG_INFO, rc=rc)
         
         
@@ -568,8 +568,8 @@ module dart_comp_nuopc
         return  ! bail out
 
 
-      ! realize the 'temp' field in the importState
-      call NUOPC_Realize(importState, fieldName="temp", field=field, rc=rc)
+      ! realize the 'sst' field in the importState
+      call NUOPC_Realize(importState, fieldName="sst", field=field, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
@@ -577,14 +577,14 @@ module dart_comp_nuopc
 
       ! log a message about the field
       if (ESMF_FieldIsCreated(field, rc=rc)) then
-        write (msgString, *) "DART - Just realized the 'temp' Field in importState."
+        write (msgString, *) "DART - Just realized the 'sst' Field in importState."
         call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__)) &
           return  ! bail out
       else
-        write(msgString,*) "DART - 'temp' Field not realized in importState."
+        write(msgString,*) "DART - 'sst' Field not realized in importState."
         call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
@@ -605,7 +605,7 @@ module dart_comp_nuopc
 
       ! Write the grid to a VTK file for visualization
       call ESMF_GridWriteVTK(grid, staggerloc=ESMF_STAGGERLOC_CENTER, &
-        filename="DART-accepted-Grid-temp_centers", rc=rc)
+        filename="DART-accepted-Grid-sst_centers", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
@@ -613,7 +613,7 @@ module dart_comp_nuopc
 #endif
 
       
-      ! realize the "temp" field in the exportState with specified totalLWidth/totalLWidth
+      ! realize the "sst" field in the exportState with specified totalLWidth/totalLWidth
       ! this is th halo region, the number of extra layers of grid points surrounding the
       ! the computational domain. One shown below!
       !  |-----|-----|-----|-----|-----|
@@ -628,7 +628,7 @@ module dart_comp_nuopc
       !  | H51 | H52 | H53 | H54 | H55 |
       !  |-----|-----|-----|-----|-----|
 
-      call NUOPC_Realize(exportState, fieldName="temp", &
+      call NUOPC_Realize(exportState, fieldName="sst", &
         totalLWidth=(/1,1/), totalUWidth=(/1,1/), field=field, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -637,14 +637,14 @@ module dart_comp_nuopc
       
       ! log a message
       if (ESMF_FieldIsCreated(field, rc=rc)) then
-        write (msgString, *) "DART - Just realized the 'temp' Field in exportState."
+        write (msgString, *) "DART - Just realized the 'sst' Field in exportState."
         call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
           file=__FILE__))&
           return ! bail out 
       else
-        write(msgString, *) "DART - 'temp' field not realized in exportState."
+        write(msgString, *) "DART - 'sst' field not realized in exportState."
         call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
           line=__LINE__, &
@@ -675,12 +675,12 @@ module dart_comp_nuopc
 #if 1
       ! write out the Grid into VTK file for inspection
       call ESMF_GridWriteVTK(grid, staggerloc=ESMF_STAGGERLOC_CENTER, &
-        filename="DART-accepted-Grid-temp_centers", rc=rc)
+        filename="DART-accepted-Grid-sst_centers", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
-      call ESMF_LogWrite("Done writing DART-accepted-Grid-temp_centers VTK", &
+      call ESMF_LogWrite("Done writing DART-accepted-Grid-sst_centers VTK", &
         ESMF_LOGMSG_INFO, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -706,7 +706,7 @@ module dart_comp_nuopc
     subroutine DataInitialize(dgcomp, rc)
 
       ! Retrieves the `exportState` from the DART component.          !
-      ! Initializes the fields (here "temp") with appropriate values. !
+      ! Initializes the fields (here "sst") with appropriate values. !
       ! Writes the initialized fields to NetCDF files.                !
       ! Indicates that data initialization is complete.               !
       
@@ -731,8 +731,8 @@ module dart_comp_nuopc
         file=__FILE__))&
         return ! bail out
       
-      ! retrieve the temperature field
-      call ESMF_StateGet(exportState, field=field, itemName="temp", rc=rc)
+      ! retrieve the sea_surface_temperature field
+      call ESMF_StateGet(exportState, field=field, itemName="sst", rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__))&
@@ -762,7 +762,7 @@ module dart_comp_nuopc
       enddo
 
       ! output the file
-      call NUOPC_Write(field, fileName="field_DART_init_export_temp.nc", &
+      call NUOPC_Write(field, fileName="field_DART_init_export_sst.nc", &
         status=ESMF_FILESTATUS_REPLACE, relaxedflag=.true., rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
