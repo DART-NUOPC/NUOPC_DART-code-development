@@ -274,7 +274,7 @@ module dart_comp_nuopc
     ! In this routine the DART component can access the transferred grid/mesh/locstream on the field that have "accept" value. 
     ! However, only the DistGrid, i.e, the decomposition and distribution information of the grid/mesh/locstream is available at 
     ! this stage, not the full physical grid information such as the coordinates.
-    
+
     subroutine AcceptTransfer(dgcomp, rc)
       type(ESMF_GridComp)   :: dgcomp
       integer, intent(out)  :: rc  
@@ -283,6 +283,9 @@ module dart_comp_nuopc
       type(ESMF_State)             :: importState, exportState
       type(ESMF_Field)             :: field
       type(ESMF_Grid)              :: grid
+      type(ESMF_Mesh)              :: mesh
+      type(ESMF_GeomType_Flag)     :: geomtype
+      type(ESMF_FieldStatus_Flag)  :: status
       integer                      :: localDeCount
       character(80)                :: name
       character(160)               :: msgString
@@ -316,20 +319,21 @@ module dart_comp_nuopc
         return  ! bail out
 
       ! while this is still an empty field, it hold a Grid with DistGrid. This step would retrieve the grid 
-      ! associated with the 'field' (which is now "sst")
-      call ESMF_FieldGet(field, grid=grid, rc=rc)
+      ! associated with the 'field' (which is now "sst"). Query an ESMF_Field object for various pieces of information.
+      
+      call ESMF_FieldGet(field, mesh=mesh, geomtype=geomtype, status=status, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
 
       ! check the grid name and print it out, this is just a step in logging the information.
-      call ESMF_GridGet(grid, name=name, rc=rc)
+      call ESMF_MeshGet(mesh, name=name, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
-      write(msgString,*) "DART - InitializeP4: transferred Grid name= ", name
+      write(msgString,*) "DART - InitializeP4: transferred Mesh name= ", name
       call ESMF_LOGWRITE(msgString, ESMF_LOGMSG_INFO, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
@@ -338,7 +342,7 @@ module dart_comp_nuopc
 
       ! access localDeCount to show this is a real Grid. By checking `localDeCount`, the code verifies that the grid is not just
       ! an empty placeholder but a real, decomposed grid. The logged `localDeCount` helps confirm this in the log output.
-      call ESMF_GridGet(grid, localDeCount=localDeCount, distgrid=distgrid, rc=rc)
+      call ESMF_GridGet(mesh, localDeCount=localDeCount, distgrid=distgrid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
@@ -408,7 +412,7 @@ module dart_comp_nuopc
         return  ! bail out
 
       ! access localDeCount of the final Grid, this would retrieve local decomposition count of the newly created grid.
-      call ESMF_GridGet(grid, localDeCount=localDeCount, rc=rc)
+      call ESMF_GridGet(mesh, localDeCount=localDeCount, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
@@ -427,7 +431,7 @@ module dart_comp_nuopc
         return  ! bail out
 
       ! Swap out the transferred for new Grid in "sst" Field
-      call ESMF_FieldEmptySet(field, grid=grid, rc=rc)
+      call ESMF_FieldEmptySet(field, mesh=mesh, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
@@ -450,13 +454,13 @@ module dart_comp_nuopc
         return  ! bail out
       
       ! construct a local Grid according to the transferred grid
-      call ESMF_FieldGet(field, grid=grid, rc=rc)
+      call ESMF_FieldGet(field, mesh=mesh, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
         return  ! bail out
         
-      call ESMF_GridGet(grid, distgrid=distgrid, rc=rc)
+      call ESMF_MeshGet(mesh, distgrid=distgrid, rc=rc)
       if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
         line=__LINE__, &
         file=__FILE__)) &
