@@ -29,10 +29,9 @@ module dart_comp_nuopc
     use NUOPC_Model, model_routine_SS        => SetServices 
     use NUOPC_Model, model_label_Advance     => label_Advance  !HK model_label_Advance
     use NUOPC_Model, model_label_SetRunClock => label_SetRunClock 
-    use NUOPC_Model, model_label_Finalize    => label_Finalize
     use NUOPC_Model, model_label_Advertise    => label_Advertise !HK model_label_Advertise
-    use NUOPC_Model, model_label_AcceptTransfer    => label_AcceptTransfer  !HK model_label_AcceptTransfer
-    use NUOPC_Model      , only : NUOPC_ModelGet, setVM
+    use NUOPC_Model, only: label_ModifyAdvertised   
+    use NUOPC_Model, only : NUOPC_ModelGet, setVM
 
     implicit none
     private 
@@ -75,6 +74,9 @@ module dart_comp_nuopc
          line=__LINE__, &
          file=__FILE__)) &
          return ! bail out
+
+        call NUOPC_CompSpecialize(dgcomp, specLabel=label_ModifyAdvertised, specRoutine=ModifyAdvertise, rc=rc)
+        if (ChkErr(rc,__LINE__, u_FILE_u)) return
 
         call NUOPC_CompSpecialize(dgcomp, specLabel=label_RealizeAccepted, &
           specRoutine=RealizeAccepted, rc=rc)
@@ -220,19 +222,19 @@ module dart_comp_nuopc
         if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
         do n = 1, fieldCount
-        ! Get field from import state
-        call ESMF_StateGet(importState, field=field, itemName=trim(lfieldnamelist(n)), rc=rc)
-        if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-        ! Remove field if it is cpl_scalars
-        if (trim(lfieldnamelist(n)) == trim(scalar_field_name)) then
-            ! Print out mirrored field name
-            call ESMF_LogWrite(trim(subname)//": "//trim(lfieldnamelist(n))//" will be removed", ESMF_LOGMSG_INFO)
-            
-            ! Remove field from import state
-            call ESMF_StateRemove(importState, itemNameList=(/trim(lfieldnamelist(n))/), relaxedFlag=.true., rc=rc) 
+            ! Get field from import state
+            call ESMF_StateGet(importState, field=field, itemName=trim(lfieldnamelist(n)), rc=rc)
             if (ChkErr(rc,__LINE__,u_FILE_u)) return
-        end if
+
+            ! Remove field if it is cpl_scalars
+            if (trim(lfieldnamelist(n)) == trim(scalar_field_name)) then
+                ! Print out mirrored field name
+                call ESMF_LogWrite(trim(subname)//": "//trim(lfieldnamelist(n))//" will be removed", ESMF_LOGMSG_INFO)
+            
+                ! Remove field from import state
+                call ESMF_StateRemove(importState, itemNameList=(/trim(lfieldnamelist(n))/), relaxedFlag=.true., rc=rc) 
+                if (ChkErr(rc,__LINE__,u_FILE_u)) return
+            end if
         end do
 
         !------------------
