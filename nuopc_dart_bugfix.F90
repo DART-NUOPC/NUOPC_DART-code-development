@@ -1,4 +1,4 @@
-# test code 
+ 
 module dart_comp_nuopc
   ! this is a dummy DART Component to be used to temporarily build a dummy libesp.a
  
@@ -6,21 +6,21 @@ module dart_comp_nuopc
 
     use ESMF             , only : ESMF_VM, ESMF_VMBroadcast
     use ESMF             , only : ESMF_Mesh, ESMF_GridComp, ESMF_SUCCESS, ESMF_Grid, ESMF_DistGrid, ESMF_DistGridConnection
-    use ESMF             , only : ESMF_GridCompSetEntryPoint, ESMF_METHOD_INITIALIZE, ESMF_DistGridCreate
+    use ESMF             , only : ESMF_GridCompSetEntryPoint, ESMF_METHOD_INITIALIZE, ESMF_DistGridCreate, ESMF_GridCompSet
     use ESMF             , only : ESMF_MethodRemove, ESMF_State, ESMF_Clock, ESMF_TimeInterval
     use ESMF             , only : ESMF_Field, ESMF_LOGMSG_INFO, ESMF_ClockGet
-    use ESMF             , only : ESMF_Time, ESMF_Alarm, ESMF_TimeGet
+    use ESMF             , only : ESMF_Time, ESMF_Alarm
     ! use ESMF             , only : operator(+), ESMF_TimeIntervalGet
-    use ESMF             , only : ESMF_TimeIntervalGet, ESMF_ClockGetAlarm
+    use ESMF             , only : ESMF_TimeIntervalGet, ESMF_ClockGetAlarm, ESMF_TimeGet
     use ESMF             , only : ESMF_AlarmIsRinging, ESMF_AlarmRingerOff, ESMF_StateGet
-    use ESMF             , only : ESMF_FieldGet, ESMF_MAXSTR, ESMF_VMBroadcast, ESMF_Array
+    use ESMF             , only : ESMF_FieldGet, ESMF_MAXSTR, ESMF_VMBroadcast, ESMF_Array, ESMF_FieldWriteVTK
     use ESMF             , only : ESMF_TraceRegionEnter, ESMF_TraceRegionExit, ESMF_GridCompGet
     use ESMF             , only : ESMF_KIND_R8, ESMF_LogFoundError
     use ESMF             , only : ESMF_LOGERR_PASSTHRU, ESMF_LOGWRITE
     
     
     use NUOPC            , only : NUOPC_CompDerive, NUOPC_CompSetEntryPoint, NUOPC_CompSpecialize
-    use NUOPC            , only : NUOPC_CompAttributeGet, NUOPC_Advertise
+    use NUOPC            , only : NUOPC_CompAttributeGet, NUOPC_Advertise, NUOPC_CompCheckSetClock
     use NUOPC            , only : NUOPC_CompFilterPhaseMap
     use NUOPC, only : NUOPC_Write ! HK what is the write for?
     use NUOPC, only : NUOPC_SetAttribute, NUOPC_CompAttributeSet, NUOPC_Realize, NUOPC_GetAttribute
@@ -28,10 +28,16 @@ module dart_comp_nuopc
     !HK three of these rename on import did not seem to work, using the model_ version for now
     use NUOPC_Model, model_routine_SS        => SetServices 
     use NUOPC_Model, model_label_Advance     => label_Advance  !HK model_label_Advance
-    use NUOPC_Model, model_label_SetRunClock => label_SetRunClock 
+    use NUOPC_Model, model_label_SetClock => label_SetClock 
     use NUOPC_Model, model_label_Advertise    => label_Advertise !HK model_label_Advertise
     use NUOPC_Model, only: label_ModifyAdvertised   
+    use NUOPC_Model, model_label_DataInitialize => label_DataInitialize
     use NUOPC_Model, only : NUOPC_ModelGet, setVM
+
+    use cop_comp_shr, only: ChkErr
+    use cop_comp_shr, only: StringListGetName
+    use cop_comp_shr, only: StringListGetNum
+    use cop_comp_shr, only: StateWrite
 
     implicit none
     private 
@@ -40,6 +46,8 @@ module dart_comp_nuopc
     public :: SetServices
     public :: SetVM
 
+    integer                     :: dbug = 0
+    character(len=*), parameter :: modName = "(dart_comp_nuopc)"
     character(len=*), parameter :: u_FILE_u = &
         __FILE__
 
@@ -66,8 +74,13 @@ module dart_comp_nuopc
             file=__FILE__))&
             return ! bail out
 
-        ! specialize the model
+        ! set the model clock to driver clock 
+        call NUOPC_CompSpecialize(dgcomp, specLabel=model_label_SetClock, &
+          specRoutine=SetClock, rc=rc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return 
+         
 
+        ! specialize the model
         call NUOPC_CompSpecialize(dgcomp, specLabel=model_label_Advertise, &
           specRoutine=InitializeAdvertise, rc=rc)
         if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -84,6 +97,10 @@ module dart_comp_nuopc
          line=__LINE__, &
          file=__FILE__)) &
          return ! bail out
+
+        ! call NUOPC_CompSpecialize(dgcomp, specLabel=model_label_DataInitialize, &
+            ! specRoutine=UpdateFieldTimes, rc=rc)
+        ! if (ChkErr(rc, __LINE__, u_FILE_u)) return
 
         call NUOPC_CompSpecialize(dgcomp, specLabel=model_label_Advance, &
           specRoutine=ModelAdvance, rc=rc)
@@ -117,6 +134,8 @@ module dart_comp_nuopc
         file=__FILE__)) &
         return ! bail out
 
+        
+
         !=========================================
         ! set attribute for field mirroring
         !=========================================
@@ -127,7 +146,10 @@ module dart_comp_nuopc
         file=__FILE__)) &
         return ! bail out
 
+        
+
         call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
+
     
     end subroutine InitializeAdvertise
 
@@ -207,7 +229,7 @@ module dart_comp_nuopc
         ! query for importState and exportState
         !------------------
 
-        call NUOPC_ModelGet(gcomp, importState=importState, exportState=exportState, rc=rc)
+        call NUOPC_ModelGet(dgcomp, importState=importState, exportState=exportState, rc=rc)
         if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
         !------------------
@@ -282,6 +304,9 @@ module dart_comp_nuopc
         type(ESMF_DistGridConnection) , allocatable :: connectionList(:)
         character(ESMF_MAXSTR), allocatable :: lfieldnamelist(:)
         character(len=*), parameter :: subname = trim(modName)//':(RealizeAccepted) '
+
+        
+       
         !---------------------------------------------------------------------------
 
         rc = ESMF_SUCCESS
@@ -300,9 +325,6 @@ module dart_comp_nuopc
 
         call ESMF_StateGet(importState, itemCount=fieldCount, rc=rc)
         if (ChkErr(rc,__LINE__,u_FILE_u)) return
-
-        call StateWriteVTK(importState, 'test', rc=rc)
-        if (ChkErr(rc, __LINE__, u_FILE_u)) return
 
         allocate(lfieldnamelist(fieldCount))
         call ESMF_StateGet(importState, itemNameList=lfieldnamelist, rc=rc)
@@ -398,10 +420,10 @@ module dart_comp_nuopc
 
                 end if ! geomType
 
-            elseif (fieldStatus=ESMF_FIELDSTATUS_EMPTY) then
+            elseif (fieldStatus == ESMF_FIELDSTATUS_EMPTY) then
                 call ESMF_LogWrite(trim(subname)//": provide grid for "//trim(lfieldnamelist(n)), ESMF_LOGMSG_INFO)
 
-            elseif (fieldStatus=ESMF_FIELDSTATUS_COMPLETE) then
+            elseif (fieldStatus == ESMF_FIELDSTATUS_COMPLETE) then
                 call ESMF_LogWrite(trim(subname)//": no grid provided for "//trim(lfieldnamelist(n)), ESMF_LOGMSG_INFO)
 
             else 
@@ -425,7 +447,78 @@ module dart_comp_nuopc
 
     end subroutine RealizeAccepted
 
-    subroutine Advance(dgcomp, rc)
+    subroutine SetClock(dgcomp, rc)
+
+        type(ESMF_GridComp)  :: dgcomp
+        real(ESMF_KIND_R8)   :: rnday
+
+        integer, intent(out) :: rc
+
+        type(ESMF_Clock)           :: driverClock, modelClock
+        type(ESMF_TimeInterval)    :: runDur, timeStep
+        type(ESMF_Time)            :: driverCurrTime, startTime, stopTime
+        character(len=ESMF_MAXSTR) :: msgString
+        integer                    :: localrc, d, h, m, s
+        integer                    :: year, month, day, hour, minute, second, millisecond
+
+        rc = ESMF_SUCCESS
+
+        ! query driver and the component clocks
+        call NUOPC_ModelGet(dgcomp, driverClock=driverClock, rc=localrc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+
+        ! Get the start time from the driver clock
+        call ESMF_ClockGet(driverClock, currTime=startTime, rc=localrc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+
+        ! Extract components from the current time
+        call ESMF_TimeGet(startTime, yy=year, mm=month, dd=day, &
+                      h=hour, m=minute, s=second, &
+                      ms=millisecond, rc=localrc)
+        if (ChkErr(localrc, __LINE__, u_FILE_u)) return
+
+        rnday = 1
+
+        ! set stop time
+        d = int(rnday)
+        h = int((rnday-d)*24)
+        m = int((rnday-d)*24*60 - h*60)
+        s = int((rnday - d) * 24 * 3600 - h * 3600 - m * 60)
+
+        call ESMF_TimeIntervalSet(runDur, d=d, h=h, m=m, rc=localrc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return 
+
+        stopTime = startTime+runDur
+
+        ! Time step must be same with the driver
+        call ESMF_ClockGet(driverClock, timeStep=timeStep, rc=localrc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+
+        ! Create component clock with the same start time as driver clock
+        modelClock = ESMF_ClockCreate(timeStep, startTime, stopTime=stopTime, rc=localrc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+ 
+
+        ! Update component clock
+        call ESMF_GridCompSet(dgcomp, clock=modelClock, rc=localrc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+
+        ! Construct a string representation of the current time
+        write(msgString, '(A,I4.4,"-",I2.2,"-",I2.2," ",I2.2,":",I2.2,":",I2.2,".",I6.6)') &
+         "SetClock: Model clock synchronized with driver clock at time: ", &
+         year, month, day, hour, minute, second, millisecond
+        call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=localrc)
+        if (ChkErr(localrc, __LINE__, u_FILE_u)) return
+
+        !> check the component clock against the driver clock
+        call NUOPC_CompCheckSetClock(dgcomp, driverClock, rc=localrc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+
+
+    end subroutine SetClock
+
+
+    subroutine ModelAdvance(dgcomp, rc)
 
         ! input/output variables
         type(ESMF_GridComp) :: dgcomp
@@ -433,59 +526,91 @@ module dart_comp_nuopc
 
         ! local variables
         type(ESMF_Time) :: currTime
-        type(ESMF_Clock) :: clock
+        type(ESMF_Clock) :: clock, modelClock
         type(ESMF_State) :: importState, exportState
         logical :: isPresent, isSet 
         character(len=ESMF_MAXSTR) :: message
+        character(len=ESMF_MAXSTR) :: msgString
         character(len=ESMF_MAXSTR) :: cvalue 
         character(len=ESMF_MAXSTR) :: timeStr
         character(len=*), parameter :: subname = trim(modName)//':(Advance) '
+
+        type(ESMF_Clock)           :: driverClock
+        type(ESMF_Time)            :: driverCurrTime
+        integer                    :: localrc
         !---------------------------------------------------------------------------
 
         rc = ESMF_SUCCESS
         call ESMF_LogWrite(subname//' called', ESMF_LOGMSG_INFO)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) Return
+
+        call NUOPC_ModelGet(dgcomp, importState=importState, modelClock=modelClock, rc=rc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+           
+
+        call ESMF_ClockPrint(modelClock, options="currTime", &
+            preString="----------------->Advancing DART from: ", unit=msgString, rc=rc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+        call ESMF_LogWrite(msgString, ESMF_LOGMSG_INFO, rc=rc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+
+        call ESMF_ClockPrint(modelClock, options="stopTime", &
+            preString="------------------> to: ", unit=msgString, rc=rc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) Return
+
+        call ESMF_ClockGet(modelClock, currTime=currTime, rc=rc)
+        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+
+
+        call ESMF_TimeGet(currTime, timeStringISOFrac=timeStr , rc=rc)
+        if (ChkErr(rc,__LINE__,u_FILE_u)) return 
+
+        call StateWriteVTK(importState, 'import_'//trim(timeStr), rc)
+        if (ChkErr(rc, __LINE__, u_FILE_u)) return
+
+
 
         !-------------------------------
         ! query for DebugLevel 
         !-------------------------------
 
-        call NUOPC_CompAttributeGet(dgcomp, name='DebugLevel', value=cvalue, &
-        isPresent=isPresent, isSet=isSet, rc=rc)
-        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+        ! call NUOPC_CompAttributeGet(dgcomp, name='DebugLevel', value=cvalue, &
+            ! isPresent=isPresent, isSet=isSet, rc=rc)
+        ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-        if (isPresent .and. isSet) then
-        read(cvalue,*) dbug
-        end if
-        write(message, fmt='(A,L)') trim(subname)//': DebugLevel = ', dbug
-        call ESMF_LogWrite(trim(message), ESMF_LOGMSG_INFO)
+        ! if (isPresent .and. isSet) then
+            ! read(cvalue,*) dbug
+        ! end if
+        ! write(message, fmt='(A,L)') trim(subname)//': DebugLevel = ', dbug
+        ! call ESMF_LogWrite(trim(message), ESMF_LOGMSG_INFO)
 
         !------------------
         ! query for clock, importState and exportState
         !------------------
 
-        call NUOPC_ModelGet(dgcomp, modelClock=clock, importState=importState, exportState=exportState, rc=rc)
-        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+        ! call NUOPC_ModelGet(dgcomp, modelClock=clock, importState=importState, exportState=exportState, rc=rc)
+        ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
-        call ESMF_ClockGet(clock, currTime=currTime, rc=rc)
-        if (ChkErr(rc,__LINE__,u_FILE_u)) return
+        ! call ESMF_ClockGet(clock, currTime=currTime, rc=rc)
+        ! if (ChkErr(rc,__LINE__,u_FILE_u)) return
 
         !------------------
         ! Write import state (for debugging)
         !------------------
 
-        if (dbug > 5) then
-        call ESMF_TimeGet(currTime, timeStringISOFrac=timeStr , rc=rc)
-        if (ChkErr(rc,__LINE__,u_FILE_u)) return  
+        ! if (dbug > 5) then
+        ! call ESMF_TimeGet(currTime, timeStringISOFrac=timeStr , rc=rc)
+        ! if (ChkErr(rc,__LINE__,u_FILE_u)) return  
 
-        call StateWrite(importState, 'import_'//trim(timeStr), rc=rc)
-        if (ChkErr(rc,__LINE__,u_FILE_u)) return 
-        end if
+        ! call StateWrite(importState, 'import_'//trim(timeStr), rc=rc)
+        ! if (ChkErr(rc,__LINE__,u_FILE_u)) return 
+        ! end if
 
         call ESMF_LogWrite(subname//' done', ESMF_LOGMSG_INFO)
 
 
 
-    end subroutine Advance
+    end subroutine ModelAdvance
 
     subroutine StateWriteVTK(state, prefix, rc)
 
@@ -524,6 +649,8 @@ module dart_comp_nuopc
 
         !> Loop over fields and write them
         do i = 1, itemCount
+          if (trim(itemNameList(i))=="So_t") then
+          call ESMF_LogWrite("writing the field: "//trim(itemNameList(i)), rc=rc)
           !> Get field
           call ESMF_StateGet(state, itemName=trim(itemNameList(i)), field=field, rc=rc)
           if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
@@ -533,10 +660,12 @@ module dart_comp_nuopc
 
           !> Write field
           call ESMF_FieldWriteVTK(field, trim(prefix)//'_'//trim(itemNameList(i)), rc=rc)
+
           if (ESMF_LogFoundError(rcToCheck=rc, msg=ESMF_LOGERR_PASSTHRU, &
               line=__LINE__, &
               file=__FILE__)) &
               return  ! bail out
+          endif
         end do
 
         !> Clean temporary variables
@@ -546,5 +675,7 @@ module dart_comp_nuopc
 
     end subroutine StateWriteVTK
 
+
 end module dart_comp_nuopc
 
+! call ESMF_GridCompSet(comp, clock=modelClock, rc=localrc)
