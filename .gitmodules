@@ -1,0 +1,3 @@
+[submodule "DART"]
+	path = DART
+	url = https://github.com/DART-NUOPC/DART.git
